@@ -1,0 +1,120 @@
+Map.centerObject(geometry);
+
+// Function to calculate NBR for a given image
+function calculateNBR(image) {
+  var nbr;
+  if (image.bandNames().contains('SR_B5')) {
+    // Landsat 8
+    nbr = image.normalizedDifference(['SR_B5', 'SR_B7']).rename('NBR');
+  } else {
+    // Landsat 5 and Landsat 7
+    nbr = image.normalizedDifference(['SR_B4', 'SR_B7']).rename('NBR');
+  }
+  return nbr;
+}
+
+// Fill gaps function for Landsat 7 using median of Landsat 5 and 8
+function fillGapsL7(image) {
+  var filled = image.focal_mean(1, 'square', 'pixels', 4)
+    .blend(image);
+  return filled.copyProperties(image, image.propertyNames());
+}
+
+// landsat-5 Collection2 level2
+var landsat5 = ee.ImageCollection("LANDSAT/LT05/C02/T1_L2")
+  .filterBounds(geometry)
+  .filterDate('2003-04-01', '2011-09-22')  // Until just before Landsat 7 SLC-off period
+  .filter(ee.Filter.equals('WRS_PATH', 168))
+  .filter(ee.Filter.equals('WRS_ROW', 35))
+  .filter(ee.Filter.calendarRange(3, 10, 'month'))
+  .filter(ee.Filter.lessThan('CLOUD_COVER', 10));
+  
+  // Reproject the images in the collection to a specified CRS
+var reprojectedLandsat5 = landsat5.map(function(image) {
+  return image.reproject({
+    crs: 'EPSG:4326',
+    scale: 30 // Specify the desired scale in meters
+  });
+});
+
+// landsat-7 Collection2 level2
+var landsat7 = ee.ImageCollection("LANDSAT/LE07/C02/T1_L2")
+  .filterBounds(geometry)
+  .filterDate('2011-09-23', '2013-04-07')  // Overlap period with remaining Landsat 5 and Landsat 8
+  .filter(ee.Filter.equals('WRS_PATH', 168))
+  .filter(ee.Filter.equals('WRS_ROW', 35))
+  .filter(ee.Filter.calendarRange(3, 10, 'month'))
+  .filter(ee.Filter.lessThan('CLOUD_COVER', 10))
+  .map(fillGapsL7);  // Fill gaps in Landsat 7 images
+  
+  // Reproject the images in the collection to a specified CRS
+var reprojectedLandsat7 = landsat7.map(function(image) {
+  return image.reproject({
+    crs: 'EPSG:4326',
+    scale: 30 // Specify the desired scale in meters
+  });
+});
+
+// landsat-8 Collection2 level2
+var landsat8 = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2")
+  .filterBounds(geometry)
+  .filterDate('2013-04-08', '2023-12-01')  // After Landsat 7 SLC-off period
+  .filter(ee.Filter.equals('WRS_PATH', 168))
+  .filter(ee.Filter.equals('WRS_ROW', 35))
+  .filter(ee.Filter.calendarRange(3, 10, 'month'))
+  .filter(ee.Filter.lessThan('CLOUD_COVER', 10));
+  
+  // Reproject the images in the collection to a specified CRS
+var reprojectedLandsat8 = landsat8.map(function(image) {
+  return image.reproject({
+    crs: 'EPSG:4326',
+    scale: 30 // Specify the desired scale in meters
+  });
+});
+
+// Map the NBR calculation over each collection
+var nbr5 = landsat5.map(calculateNBR);
+var nbr7 = landsat7.map(calculateNBR);
+var nbr8 = landsat8.map(calculateNBR);
+
+// Stack all NBR in one file
+var stackpro5 = nbr5.toBands();
+var stackpro7 = nbr7.toBands();
+var stackpro8 = nbr8.toBands();
+
+var stack = ee.Image.cat([stackpro5, stackpro7, stackpro8]);
+
+// Print the stack for debugging
+print(stack);
+
+// Export the combined NBR stack to Google Drive
+Export.image.toDrive({
+  image: stack,
+  description: 'combined_nbr',
+  scale: 60,  // Appropriate scale for Landsat images
+  region: geometry,
+  maxPixels: 1e13
+});
+
+// Extracting dates and printing them for each Landsat collection
+function extractDates(imageCollection) {
+  return imageCollection.map(function(image) {
+    return ee.Feature(null, {date: ee.Date(image.get('system:time_start'))});
+  });
+}
+
+var datesLandsat5 = extractDates(landsat5);
+var datesLandsat7 = extractDates(landsat7);
+var datesLandsat8 = extractDates(landsat8);
+
+print('Dates Landsat 5:', datesLandsat5.aggregate_array('date'));
+print('Dates Landsat 7:', datesLandsat7.aggregate_array('date'));
+print('Dates Landsat 8:', datesLandsat8.aggregate_array('date'));
+
+// Visualize one NBR image from Landsat 7 to check gap-filling
+var sampleL7Image = nbr7.first();
+Map.addLayer(sampleL7Image.clip(geometry), {min: -1, max: 1, palette: ['blue', 'red', 'green']}, 'Landsat 7 NBR Sample');
+
+// Optionally, visualize an original Landsat 7 image to compare
+var originalL7Image = landsat7.first();
+Map.addLayer(originalL7Image.clip(geometry), {bands: ['SR_B4', 'SR_B3', 'SR_B2'], min: 0, max: 3000}, 'Original L7 Image (Before NBR)');
