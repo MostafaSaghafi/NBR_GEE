@@ -1,7 +1,7 @@
 Extract NBR index using GEE (SLC issue resolved)
 ---
 
-In this code, we calculated the Normalized Burn Ratio (NBR) over a span of 10 years using Landsat-5, Landsat-7, and Landsat-8. Additionally, we addressed the Scan Line Corrector (SLC) issue and resolved it using the `focal_mean` algorithm.
+In this code, we calculated the Normalized Burn Ratio (NBR) over a span of 20 years using Landsat-5, Landsat-7, and Landsat-8. Additionally, we addressed the Scan Line Corrector (SLC) issue and resolved it using the `focal_mean` algorithm.
 
 ---
 
