@@ -11,7 +11,7 @@ In this code, we calculated the Normalized Burn Ratio (NBR) over a span of 10 ye
 Map.centerObject(geometry);
 ```
 Centers the map view in the Google Earth Engine (GEE) interface based on a specific `geometry` variable, which defines the area of interest. 
-- **`geometry`**: Likely defined earlier or elsewhere in the code; it represents the geographic region the code is applied to.
+- **`geometry`**:  It represents the geographic region the code is applied to.
 
 ---
 
